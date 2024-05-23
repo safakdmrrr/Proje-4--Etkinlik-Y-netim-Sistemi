@@ -1,0 +1,302 @@
+import sys
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QDialog, QMessageBox, QInputDialog, QFormLayout
+
+class User:
+    def __init__(self, first_name, last_name, age):
+        self.first_name = first_name
+        self.last_name = last_name
+        self.age = age
+        self.has_ticket = False  # Bilet durumu
+
+class MyApplication(QMainWindow):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Etkinlik Takip Uygulaması")
+
+        # Ekran boyutunu sabit bir değere ayarla
+        self.setFixedSize(600, 400)
+
+        self.users = [
+            User("Ali", "Bülbül", 30),
+            User("Ayşe", "Yılmaz", 25),
+            User("Mehmet", "Yıldız", 35)
+        ]
+
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
+
+        self.user_operations_tab = QWidget()
+        self.events_tab = QWidget()
+        self.ticket_operations_tab = QWidget()
+
+        self.tabs.addTab(self.user_operations_tab, "Kullanıcı İşlemleri")
+        self.tabs.addTab(self.events_tab, "Etkinlikler")
+        self.tabs.addTab(self.ticket_operations_tab, "Bilet İşlemleri")
+
+        self.initUserOperationsTab()
+        self.initEventsTab()
+        self.initTicketOperationsTab()
+
+        # Bilet işlemleri geçmişi için liste
+        self.ticket_history = []
+
+    def initUserOperationsTab(self):
+        layout = QVBoxLayout()
+
+        # Kullanıcı ekleme alanı düzeni
+        form_layout = QFormLayout()
+        self.first_name_input = QLineEdit()
+        self.last_name_input = QLineEdit()
+        self.age_input = QLineEdit()
+        form_layout.addRow("Ad:", self.first_name_input)
+        form_layout.addRow("Soyad:", self.last_name_input)
+        form_layout.addRow("Yaş:", self.age_input)
+
+        add_user_button = QPushButton("Kullanıcı Ekle")
+        add_user_button.clicked.connect(self.addUser)
+
+        # Butonun CSS stilini ayarla
+        add_user_button.setStyleSheet("background-color: darkgreen; color: white;")
+
+        layout.addLayout(form_layout)
+        layout.addWidget(add_user_button)
+
+        self.user_operations_tab.setLayout(layout)
+
+    def addUser(self):
+        first_name = self.first_name_input.text()
+        last_name = self.last_name_input.text()
+        age = self.age_input.text()
+
+        if not (first_name and last_name and age):
+            QMessageBox.warning(self, "Uyarı", "Lütfen tüm alanları doldurun.")
+            return
+
+        new_user = User(first_name, last_name, age)
+        self.users.append(new_user)
+        QMessageBox.information(self, "Başarılı", f"{first_name} {last_name} ({age} yaş) başarıyla eklendi.")
+
+    def initEventsTab(self):
+        layout = QVBoxLayout()
+
+        add_event_button = QPushButton("Etkinlik Ekle")
+        add_event_button.clicked.connect(self.showAddEventDialog)
+
+        # Butonun CSS stilini ayarla
+        add_event_button.setStyleSheet("background-color: darkgreen; color: white;")
+
+        layout.addWidget(add_event_button)
+
+        self.events_list = QListWidget()
+        self.events_list.itemClicked.connect(self.showEventDetailsDialog)
+        layout.addWidget(self.events_list)
+
+        self.events_tab.setLayout(layout)
+
+    def showAddEventDialog(self):
+        dialog = AddEventDialog()
+        if dialog.exec_():
+            event_name = dialog.event_name_input.text()
+            event_content = dialog.event_content_input.toPlainText()
+            event_date = dialog.event_date_input.text()
+            event_location = dialog.event_location_input.text()
+
+            event_item = QListWidgetItem(event_name)
+            event_item.event_name = event_name
+            event_item.event_content = event_content
+            event_item.event_date = event_date
+            event_item.event_location = event_location
+            self.events_list.addItem(event_item)
+
+    def showEventDetailsDialog(self, item):
+        dialog = EventDetailsDialog(item, self.events_list, self.users)
+        dialog.exec_()
+
+    def initTicketOperationsTab(self):
+        layout = QVBoxLayout()
+
+        # Sol tarafta bilet verme alanı ve butonu
+        ticket_left_layout = QVBoxLayout()
+        self.ticket_info_input = QTextEdit()
+        self.ticket_info_input.setMaximumHeight(100)  # Yazı giriş alanı boyutunu ayarla
+        ticket_left_layout.addWidget(self.ticket_info_input)
+
+        ticket_button_layout = QVBoxLayout()
+        ticket_button_layout.addStretch()
+        self.ticket_button = QPushButton("Bilet Ver")
+        self.ticket_button.clicked.connect(self.issueTicket)
+
+        # Butonun CSS stilini ayarla
+        self.ticket_button.setStyleSheet("background-color: darkgreen; color: white;")
+
+        ticket_button_layout.addWidget(self.ticket_button)
+
+        ticket_left_layout.addLayout(ticket_button_layout)
+
+        layout.addLayout(ticket_left_layout)
+
+        # Sağ tarafta bilet işlemleri geçmişi
+        ticket_history_layout = QVBoxLayout()
+        self.ticket_history_label = QLabel("Bilet İşlem Geçmişi")
+        ticket_history_layout.addWidget(self.ticket_history_label)
+
+        self.ticket_history_text = QTextEdit()
+        self.ticket_history_text.setReadOnly(True)
+        ticket_history_layout.addWidget(self.ticket_history_text)
+
+        layout.addLayout(ticket_history_layout)
+
+        self.ticket_operations_tab.setLayout(layout)
+
+    def issueTicket(self):
+        ticket_info = self.ticket_info_input.toPlainText()
+
+        if ticket_info:
+            # Bilet almak isteyen kişinin adını ve soyadını al
+            user_name = ticket_info.strip()  # Yazıyı boşluklardan temizle
+            name_parts = user_name.split()
+
+            if len(name_parts) != 2:
+                QMessageBox.warning(self, "Hata", "Lütfen geçerli bir isim ve soyisim girin (Örnek: Ali Bülbül).")
+                return
+
+            first_name, last_name = name_parts
+
+            # Sistemde bu kullanıcıyı kontrol et
+            user_exists = False
+            user_to_issue_ticket = None
+            for user in self.users:
+                if user.first_name == first_name and user.last_name == last_name:
+                    user_exists = True
+                    user_to_issue_ticket = user
+                    break
+
+            if user_exists and not user_to_issue_ticket.has_ticket:
+                user_to_issue_ticket.has_ticket = True  # Bilet ver
+                result = f"Bilet verildi: {user_name}"
+                self.ticket_history.append(result)
+                self.ticket_history_text.setPlainText("\n".join(self.ticket_history))
+                QMessageBox.information(self, "Başarılı", f"{user_name} adlı kullanıcıya bilet başarıyla verildi.")
+            elif user_exists and user_to_issue_ticket.has_ticket:
+                QMessageBox.warning(self, "Hata", f"{user_name} adlı kullanıcı zaten bilet almış.")
+            else:
+                QMessageBox.warning(self, "Hata", f"{user_name} adlı kullanıcı sistemde kayıtlı değil.")
+
+    def clearTicketHistory(self):
+        self.ticket_history = []
+        self.ticket_history_text.clear()
+
+class AddEventDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Yeni Etkinlik Ekle")
+
+        layout = QVBoxLayout()
+
+        self.event_name_input = QLineEdit()
+        self.event_content_input = QTextEdit()
+        self.event_date_input = QLineEdit()
+        self.event_location_input = QLineEdit()
+
+        layout.addWidget(QLabel("Etkinlik İsmi:"))
+        layout.addWidget(self.event_name_input)
+        layout.addWidget(QLabel("İçerik:"))
+        layout.addWidget(self.event_content_input)
+        layout.addWidget(QLabel("Tarih:"))
+        layout.addWidget(self.event_date_input)
+        layout.addWidget(QLabel("Yer:"))
+        layout.addWidget(self.event_location_input)
+
+        create_button = QPushButton("Oluştur")
+        create_button.clicked.connect(self.accept)
+        layout.addWidget(create_button)
+
+        self.setLayout(layout)
+
+class EventDetailsDialog(QDialog):
+    def __init__(self, item, events_list, users):
+        super().__init__()
+
+        self.setWindowTitle("Etkinlik Detayları")
+        self.setMinimumWidth(500)
+
+        self.item = item
+        self.events_list = events_list
+        self.users = users
+
+        layout = QVBoxLayout()
+
+        self.event_name_label = QLabel(f"<b>{item.event_name}</b><br><br>")
+        layout.addWidget(self.event_name_label)
+
+        self.event_content_label = QLabel(f"{item.event_content}")
+        layout.addWidget(self.event_content_label)
+
+        self.event_date_label = QLabel(f"Tarih: {item.event_date}")
+        layout.addWidget(self.event_date_label)
+
+        self.event_location_label = QLabel(f"Yer: {item.event_location}")
+        layout.addWidget(self.event_location_label)
+
+        self.edit_name_button = QPushButton("İsmi Düzenle")
+        self.edit_name_button.clicked.connect(self.editEventName)
+        layout.addWidget(self.edit_name_button)
+
+        self.delete_button = QPushButton("Sil")
+        self.delete_button.clicked.connect(self.deleteEvent)
+        layout.addWidget(self.delete_button)
+
+        self.add_participant_button = QPushButton("Katılımcı Ekle")
+        self.add_participant_button.clicked.connect(self.addParticipant)
+        layout.addWidget(self.add_participant_button)
+
+        self.setLayout(layout)
+
+    def editEventName(self):
+        new_name, ok = QInputDialog.getText(self, "İsim Değiştir", "Yeni İsim:")
+        if ok and new_name:
+            self.item.setText(new_name)
+            self.item.event_name = new_name
+            self.event_name_label.setText(f"<b>{new_name}</b><br><br>")
+
+    def deleteEvent(self):
+        reply = QMessageBox.question(self, "Etkinliği Sil", "Bu etkinliği silmek istediğinizden emin misiniz?", QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            row = self.events_list.row(self.item)
+            self.events_list.takeItem(row)
+
+    def addParticipant(self):
+        participant_name, ok = QInputDialog.getText(self, "Katılımcı Ekle", "Katılımcı Adı Soyadı:")
+        if ok and participant_name:
+            # Sistemde kayıtlı olup bilet almış kullanıcıları listele
+            eligible_users = [user for user in self.users if user.has_ticket]
+            eligible_user_names = [f"{user.first_name} {user.last_name}" for user in eligible_users]
+
+            if participant_name in eligible_user_names:
+                QMessageBox.information(self, "Başarılı", f"{participant_name} etkinliğe başarıyla eklendi.")
+            else:
+                QMessageBox.warning(self, "Hata", f"{participant_name} adlı kullanıcıya etkinlik eklenemez.")
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MyApplication()
+
+    # Arka plan rengini ve butonların CSS stilini ayarla
+    window.setStyleSheet("""
+        background-color: lightgreen;
+        QPushButton {
+            background-color: darkgreen;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        QPushButton:hover {
+            background-color: forestgreen;
+        }
+    """)
+
+    window.show()
+    sys.exit(app.exec_())
